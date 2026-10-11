@@ -1,0 +1,95 @@
+1.
+
+/////
+__global__
+void detectPlants(float *A, int *result, int M, int N)
+{
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row >= M)
+        return;
+
+    int lastWater = -1;
+
+    for(int j = 0; j < N; j++)
+    {
+        if(j == 0)
+        {
+            if(A[row*N + j] >= 0.5)
+                lastWater = 0;
+        }
+        else
+        {
+            if(A[row*N + j] >= 0.5 ||
+               A[row*N + j] > A[row*N + j - 1])
+            {
+                lastWater = j;
+            }
+        }
+    }
+
+    if(lastWater == -1)
+        result[row] = N;
+    else
+        result[row] = N - 1 - lastWater;
+}
+///////////////////////////////////////////////////////////////////////////////
+2.
+char* B[32*n];
+char* L[32];
+int n;
+char *d_B;
+char *d_L;
+int *d_found;
+
+cudaMalloc(&d_B, 32*n);
+cudaMalloc(&d_L, 32);
+cudaMalloc(&d_found, sizeof(int));
+
+cudaMemcpy(d_B, B, 32*n, cudaMemcpyHostToDevice);
+cudaMemcpy(d_L, L, 32, cudaMemcpyHostToDevice);
+
+int found = 0;
+cudaMemcpy(d_found, &found, sizeof(int), cudaMemcpyHostToDevice);
+
+int threads = 256;
+int blocks = (n + threads - 1) / threads;
+
+checkPassword<<<blocks,threads>>>(d_B,d_L,n,d_found);
+
+cudaMemcpy(&found,d_found,sizeof(int),cudaMemcpyDeviceToHost);
+
+if(found==1)
+    printf("UPOZORENJE: Lozinka je pronadjena u bazi!\n");
+else
+    printf("Lozinka nije pronadjena.\n");
+
+cudaFree(d_B);
+cudaFree(d_L);
+cudaFree(d_found);
+///////////////////////////////////////
+__global__
+void checkPassword(const char *db,
+                   const char *password,
+                   int n,
+                   int *found)
+{
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (id >= n)
+        return;
+
+    bool equal = true;
+
+    for(int i=0;i<32;i++)
+    {
+        if(db[id*32+i] != password[i])
+        {
+            equal = false;
+            break;
+        }
+    }
+
+    if(equal)
+        *found = 1;
+}
